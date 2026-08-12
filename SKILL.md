@@ -1,170 +1,234 @@
 ---
 name: nextjs-pattern
-description: Use this skill to analyze, scaffold, and review the sample-compatible Next.js feature-based modular architecture with App Router, API client layers, React Query, Zustand auth/session, and frontend/fullstack boundaries.
+description: Use this skill to scaffold, organize, and review frontend-only Next.js App Router projects using Magic UI's hybrid structure by default and Feature-Sliced Design for large applications.
 ---
 
-# nextjs-pattern
+# Next.js Project Structure
 
-Use this skill when the user asks to work with a Next.js modular pattern, including:
+Use this skill when creating or reorganizing a frontend-only Next.js App Router project, route, component, utility, hook, or business module.
 
-- deciding whether a Next.js repo is frontend-only or fullstack
-- scaffolding a new domain feature
-- reviewing `app/`, `features/`, `core/`, `shared/`, `lib`, and `types` boundaries
-- checking API client, React Query hooks, Zustand stores, or App Router pages
-- converting an ad-hoc Next.js project toward the sample pattern
+This skill does not create backend code, `app/api/**/route.ts` handlers, database access, server-owned authentication, webhooks, queues, or backend-for-frontend endpoints. Call external backend APIs through frontend utilities in `lib/`.
 
-## Pattern Identity
+This pattern has two modes:
 
-This is a frontend-first Next.js App Router pattern inspired by React Native feature modules.
+1. **Hybrid structure** is the default for small and medium projects.
+2. **Feature-Sliced Design (FSD)** is for large applications with multiple business domains and teams.
 
-Main flow:
+Start with hybrid. Do not introduce FSD layers, a state manager, a query library, or a new folder merely for consistency.
+
+## Decide the Mode
+
+Use the hybrid structure unless at least one is true:
+
+- Multiple business domains need isolated ownership, such as products, cart, orders, users, and payments.
+- Features combine entity UI, user actions, and page sections across multiple routes.
+- Cross-domain dependencies are becoming hard to review.
+- The project needs explicit layer boundaries for several developers or teams.
+
+If none applies, use hybrid. Do not mix hybrid business folders and FSD layers for the same code.
+
+## Hybrid Structure: Default
+
+Use `src/` as the required application source root. Always create App Router files in `src/app/` and application code in `src/`; do not use a root-level `app/` directory.
 
 ```text
-feature API -> React Query hook or auth store action -> component/page
+.
+├── public/                      # static assets served directly
+├── src/
+│   ├── app/                     # frontend routes, layouts, special files
+│   ├── components/              # reusable React components
+│   │   └── ui/                  # reusable UI primitives, such as shadcn/ui
+│   ├── hooks/                   # shared React hooks
+│   ├── lib/                     # utilities, integrations, configuration
+│   └── styles/                  # shared styles when not colocated in app
+├── package.json
+├── next.config.*
+├── tsconfig.json
+└── .env.*
 ```
 
-Use it for admin panels, dashboards, and frontend apps that call an external backend API.
+- Keep `public/`, `package.json`, `next.config.*`, `tsconfig.json`, and `.env.*` at the repository root.
+- If using `src/`, move other application folders such as `components/` and `lib/` inside it.
+- Do not keep both `app/` and `src/app/`; Next.js ignores `src/app/` when root `app/` exists.
+- Put global App Router CSS in `src/app/globals.css` and import it from the root layout. Do not create `src/styles/globals.css` unless the project deliberately configures and imports it.
 
-## Core Rule
+### Hybrid Placement Rules
 
-`app/` should stay thin: routes, layouts, pages, route handlers, and composition. Business logic belongs in `features/` or shared infrastructure.
+| Code | Location |
+| --- | --- |
+| URL route, layout, loading UI, error UI, metadata | `src/app/` |
+| Component reused across routes or domains | `src/components/` |
+| Reusable UI primitive | `src/components/ui/` |
+| Shared React hook | `src/hooks/` |
+| Utility, integration, configuration, auth helper | `src/lib/` |
+| Global or reusable styles | `src/styles/` or `src/app/globals.css` |
+| Asset needing a direct URL, favicon, downloadable file | `public/` |
+| Local image used only by a component or feature | colocate and import it with `next/image` |
+| UI/helper used by one route subtree only | colocate under that route, preferably in a `_` folder |
 
-## Standard Structure
+Do not move a route-local component to `components/` before another route needs it.
+
+## App Router Rules
+
+`app/` owns URL structure and Next.js special files.
+
+```text
+src/app/
+├── (marketing)/                 # route group; absent from URL
+│   └── page.tsx
+├── (auth)/
+│   ├── sign-in/
+│   │   └── page.tsx
+│   └── sign-up/
+│       └── page.tsx
+├── dashboard/
+│   ├── _components/             # private route-local files
+│   │   └── DashboardHeader.tsx
+│   ├── loading.tsx
+│   ├── error.tsx
+│   └── page.tsx
+├── globals.css
+├── layout.tsx
+├── not-found.tsx
+└── page.tsx
+```
+
+- Use `page.tsx` for route UI and `layout.tsx` for shared or nested layout.
+- Use `loading.tsx`, `error.tsx`, and `not-found.tsx` when the route needs those states.
+- Do not create `route.ts`; this is a frontend-only pattern.
+- Use `(group)` to organize routes without affecting the URL.
+- Use `_components/`, `_lib/`, `_actions/`, or another `_` prefixed folder for private route files. Folders beginning with `_` are excluded from routing.
+- Co-locate files within a route segment when they are only used by that segment. A folder becomes a page route when it contains `page.tsx`.
+- Use default exports for React special files such as `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, and `not-found.tsx`.
+- App Router components are Server Components by default. Add `'use client'` only when a component needs browser APIs, event handlers, effects, or client-only state.
+- Keep client-component boundaries small so route UI does not ship unnecessary JavaScript.
+
+Do not use route groups to choose SSR, SSG, ISR, or caching. Configure rendering and caching behavior per route.
+
+## Naming and Imports
+
+Use the project naming convention if one exists. For a new project, use:
+
+- Next.js special files: lowercase exact conventions, such as `page.tsx`, `layout.tsx`, and `loading.tsx`.
+- React components: PascalCase, such as `SignInForm.tsx` and `ProductCard.tsx`.
+- Hooks: kebab-case with `use-` prefix, such as `use-local-storage.ts` and `use-auth-session.ts`.
+- Utilities: descriptive kebab-case, such as `format-currency.ts`.
+- Route folders: kebab-case, such as `order-history/` and `add-to-cart/`.
+- FSD slice folders: preserve the project's convention; for a new FSD project, use the article's domain names such as `product/`, `addToCart/`, and `productCard/`.
+
+Configure TypeScript aliases for source folders when the project uses `src/`:
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+```
+
+Use aliases consistently:
+
+```ts
+import { Button } from '@/components/ui/Button';
+import { formatCurrency } from '@/lib/format-currency';
+import { useAuthSession } from '@/hooks/use-auth-session';
+```
+
+## Feature-Sliced Design: Large Applications Only
+
+For a large application, organize `src/` into FSD layers:
 
 ```text
 src/
-├── app/         # App Router routes
-├── features/    # business domain modules
-├── shared/      # reusable UI and utilities
-├── core/        # infrastructure: API client, env, config
-├── lib/         # third-party setup/wrappers
-└── types/       # global TypeScript types
+├── app/                         # physical App Router: routes, layouts, providers, global styles
+├── views/                       # FSD page-composition layer; not a Next.js router
+├── widgets/                     # composed page sections
+├── features/                    # user actions and business capabilities
+├── entities/                    # business entities
+└── shared/                      # reusable UI, utilities, API/config primitives
 ```
 
-## Dependency Rules
+`src/app/` remains the physical Next.js router. Keep each `src/app/**/page.tsx` thin and compose the matching FSD page module from `src/views/`. Do not create `src/pages/`: Next.js reserves it for the legacy Pages Router.
 
-Preferred boundary:
+### Layer Purpose
+
+| Layer | Owns |
+| --- | --- |
+| `shared` | framework-independent utilities, reusable UI, API/config primitives |
+| `entities` | domain objects such as user, product, order |
+| `features` | user actions such as sign-in, add-to-cart, checkout |
+| `widgets` | composed sections that combine features and entities |
+| `views` | route-level page compositions; implementation name for FSD's conceptual `pages` layer |
+| `app` | providers, global styles, and Next.js routing setup |
+
+Each layer may depend only on layers below it:
 
 ```text
-app/       -> features/ via index.ts, shared/, lib/
-features/  -> core/, shared/, lib/
-shared/    -> lib/
-core/      -> standalone when practical
-lib/       -> standalone
+app -> views -> widgets -> features -> entities -> shared
 ```
 
-Sample-compatible shortcut: small FE-only admin apps may wire auth by letting `core/api/client.ts` read `features/auth/store/authStore` for token injection and 401 logout.
+A feature must not import a widget or view. An entity must not import a feature, widget, view, or app module. `shared/` must not import from any higher layer.
 
-Preferred upgrade: expose `setApiClientAuth(...)` from the API client and wire auth from `features/auth` so `core/` does not import `features/`.
-
-Use the shortcut for simple frontend shells. Use the upgrade when the app grows, auth changes often, tests need isolation, or the API client may run in server contexts.
-
-## Feature Module Shape
+Within an FSD slice, create only the segments that exist:
 
 ```text
-features/{feature-name}/
-├── api/           # {feature}Api.ts: HTTP calls only
-├── hooks/         # use{Feature}.ts: React Query hooks
-├── components/    # feature UI
-├── store/         # optional Zustand client/session state
-├── types/         # {feature}.types.ts
-└── index.ts       # public barrel export
+src/features/addToCart/
+├── model/
+└── ui/
 ```
 
-## Scaffolding Order
+```text
+src/entities/product/
+├── model/
+└── ui/
+```
 
-1. Create feature folders if missing.
-2. Add feature types in `features/{name}/types/`.
-3. Add endpoint constants in `core/api/endpoints.ts`.
-4. Add API functions in `features/{name}/api/`.
-5. Add React Query hooks in `features/{name}/hooks/` for CRUD server data.
-6. Add components in `features/{name}/components/`.
-7. Export the public API from `features/{name}/index.ts`.
-8. Compose the page in `app/(group)/{name}/page.tsx`.
-9. Add navigation only if the user requested a visible route.
-
-Detailed examples: [references/scaffolding.md](references/scaffolding.md).
-
-## Import Rules
+Use `ui/` for components and `model/` for state, types, and business logic. Add `<slice>/api/` only when that domain needs data access. When another slice or layer consumes a slice, add its `index.ts` and import only through that public API. A slice used only internally does not need `index.ts`.
 
 ```ts
-// Good: outside a feature, import through its public barrel.
-import { ProductList, useProducts } from '@/features/products';
+// src/features/addToCart/index.ts
+export { AddToCartButton } from './ui/AddToCartButton';
 
-// Avoid: outside a feature, do not import internals; export intentional public APIs from the barrel.
-import { productApi } from '@/features/products/api/productApi';
-
-// Good: inside the same feature, relative internal imports are fine.
-import { productApi } from '../api/productApi';
+// consumer
+import { AddToCartButton } from '@/features/addToCart';
+import { ProductPrice } from '@/entities/product';
 ```
 
-## Server Component Exception
+## External API Access
 
-Client components should use feature hooks.
+This is a frontend-only pattern.
 
-Server Components may call feature API functions directly for server-side data fetching. Prefer importing APIs from the feature barrel when exported:
+- In hybrid mode, put external API clients, integrations, and configuration in `src/lib/`.
+- In FSD mode, put shared API-client primitives and configuration in `src/shared/api/` or `src/shared/config/`; put domain-specific requests in that domain's `<slice>/api/`.
+- Consume external API results from components, hooks, or FSD slices.
 
-```ts
-import { productApi } from '@/features/products';
-```
+Never create `app/api/**/route.ts`, database code, webhooks, queues, or server-owned authentication in this pattern. Do not put private backend credentials in `NEXT_PUBLIC_` environment variables.
 
-Avoid internal imports like `@/features/products/api/productApi` unless that API is intentionally not part of the public barrel.
+## Scaffold Workflow
 
-## Export Rules
-
-- Use named exports for components, hooks, APIs, stores, and utilities.
-- Use `export default` only where Next.js requires it: `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, etc.
-- Keep each feature's `index.ts` as the public API. Export internals only when another layer truly needs them.
-
-## State Rules
-
-- Server data: TanStack Query.
-- Auth/session state: Zustand with `persist` is acceptable.
-- Client UI state: Zustand only when state must be shared across components or routes.
-- Do not move ordinary server lists/details into Zustand when React Query owns them.
-- Mutations should invalidate the relevant query keys.
-
-## Auth Store Exception
-
-The sample keeps `user`, `token`, `isAuthenticated`, `loading`, `login`, `register`, and `logout` in `features/auth/store/authStore.ts` using Zustand persist.
-
-This is sample-compatible for frontend-only admin apps. For stricter architecture, keep the store as session state and move API-client auth wiring to callback injection.
-
-## FE-only vs Fullstack Boundary
-
-A project with pages plus Axios/fetch clients that call an external API is frontend-only, even if it uses the App Router.
-
-Do not classify a project as fullstack just because docs mention `app/api`. Only classify it as fullstack when actual `app/api/**/route.ts` files implement backend behavior such as database access, auth/session server code, queues, webhooks, or durable mutations.
-
-Detailed checklist: [references/fullstack-boundary.md](references/fullstack-boundary.md).
-
-## Navigation
-
-In the sample, main navigation lives in `shared/components/layout/Sidebar.tsx`. When adding a visible route under `app/(main)`, update `menuItems` only if requested.
+1. Use `src/` as the only application source root. If a project has root-level application folders, stop and ask before restructuring it.
+2. Inspect whether the project uses hybrid or FSD. Preserve the established mode.
+3. Determine whether the requested code is route-local, reusable, or a business capability.
+4. Use the placement rules for the selected mode.
+5. Create the fewest files and folders required; do not create empty conventional folders.
+6. Add aliases only when imports already justify them.
+7. Run the smallest relevant project check: typecheck, test, lint, or build.
 
 ## Review Checklist
 
-Before approving a Next.js pattern change, verify:
-
-- `app/` is thin and composes features.
-- cross-feature imports go through `features/{name}/index.ts`.
-- `core -> features/auth/store` is treated as a sample shortcut, not a scalable default.
-- API files use endpoint constants, not hardcoded repeated URLs.
-- components handle loading, error, and empty states where data is async.
-- mutations invalidate precise query keys.
-- Zustand is used for auth/session or true client state, not ordinary server lists.
-- no default exports outside Next.js route convention files.
-
-Detailed checklist: [references/review-checklist.md](references/review-checklist.md).
-
-## Reference Files
-
-- [references/architecture.md](references/architecture.md) — layer rules and dependency boundaries.
-- [references/scaffolding.md](references/scaffolding.md) — complete feature scaffolding examples.
-- [references/core-infrastructure.md](references/core-infrastructure.md) — API client, env, endpoints, and interceptor pattern.
-- [references/fullstack-boundary.md](references/fullstack-boundary.md) — FE-only vs fullstack classification.
-- [references/review-checklist.md](references/review-checklist.md) — architecture review checklist.
-
-## Example Project
-
-A local sample app may live at `nextjs-base-modular-partent-main/`. It is ignored by Git and used as the observed pattern. Reference files document the Claude-friendly version of that pattern while preserving sample-compatible behavior.
+- `src/` is the only application source root; no root-level `app/`, `components/`, `hooks/`, `lib/`, or `styles/` folders exist.
+- The project uses one mode per area: hybrid by default or FSD when justified.
+- `src/app/` contains routing, layouts, special files, and composition; route-local code is colocated.
+- In FSD mode, `src/app/**/page.tsx` composes the matching `src/views/` module; no `src/pages/` directory exists.
+- Server Components remain the default; `'use client'` is limited to interactive or browser-only boundaries.
+- Route groups do not appear in URL assumptions.
+- Private `_` folders do not become routes.
+- Hybrid reusable UI is in `components/` and primitives are in `components/ui/`.
+- Hybrid utilities, integrations, and configuration are in `lib/`; shared hooks are in `hooks/`.
+- FSD dependencies flow only downward: `app -> views -> widgets -> features -> entities -> shared`.
+- A slice imported by another slice or layer exposes `index.ts`; consumers do not import its internals.
+- No `app/api/**/route.ts` handler or other backend code was introduced.
+- No unnecessary FSD layer, library, state manager, or empty folder was introduced.
