@@ -1,9 +1,7 @@
-.claude
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
 .mcp.json
-.repo-pattern.json
-.repo-pattern.lock.json
 CLAUDE.md
-node_modules/
-*.tgz
-
-nextjs-base-modular-partent-main/
